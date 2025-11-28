@@ -87,7 +87,7 @@ public class Main {
 
                     byte[] fullContent = new byte[headerBytes.length + fileContent.length];
                     System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
-                    System.arraycopy(fileContent, 0, fullContent, 0, fileContent.length);
+                    System.arraycopy(fileContent, 0, fullContent, headerBytes.length, fileContent.length);
 
                     MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
                     byte[] hashBytes = sha1.digest(fullContent);
@@ -128,6 +128,7 @@ public class Main {
 
                 } catch (Exception e) {
                     System.err.print("Fatal: could not hash object");
+//                    e.printStackTrace(System.err);
                     System.exit(1);
                 }
             }
