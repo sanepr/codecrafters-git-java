@@ -82,7 +82,7 @@ public class Main {
                 try {
                     byte[] fileContent = Files.readAllBytes(Path.of(filePath));
 
-                    String header = "blob" + fileContent.length + "\0";
+                    String header = "blob " + fileContent.length + "\0";
                     byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
 
                     byte[] fullContent = new byte[headerBytes.length + fileContent.length];
