@@ -97,7 +97,7 @@ public class ListTreeCommand {
             }
         } catch (Exception e) {
             System.err.print("Fatal: could not tree object");
-            System.exit(1);
+            System.exit(0);
         }
     }
 }
