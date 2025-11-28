@@ -41,7 +41,7 @@ public class Main {
                         }
 
                         String decompressedString = outputStream.toString("UTF-8");
-                        System.out.println(decompressedString.substring(decompressedString.indexOf("\0") + 1));
+                        System.out.print(decompressedString.substring(decompressedString.indexOf("\0") + 1));
 
                     } catch (DataFormatException e) {
                         throw new RuntimeException(e);
