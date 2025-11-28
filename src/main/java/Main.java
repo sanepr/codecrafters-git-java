@@ -1,6 +1,7 @@
 import command.CatCommand;
 import command.HashObjectCommand;
 import command.InitCommand;
+import command.ListTreeCommand;
 
 public class Main {
     public static void main(String[] args) {
@@ -10,15 +11,10 @@ public class Main {
         final String command = args[0];
 
         switch (command) {
-            case "init" -> {
-                InitCommand.initCommand();
-            }
-            case "cat-file" -> {
-                CatCommand.catFileCommand(args);
-            }
-            case "hash-object" -> {
-                HashObjectCommand.hashObjectCommand(args);
-            }
+            case "init" -> InitCommand.initCommand();
+            case "cat-file" -> CatCommand.catFileCommand(args);
+            case "hash-object" -> HashObjectCommand.hashObjectCommand(args);
+            case "ls-tree" -> ListTreeCommand.lsTree(args);
             default -> System.out.println("Unknown command: " + command);
         }
     }
