@@ -11,7 +11,7 @@ public class ListTreeCommand {
     public static void lsTree(String[] args)  {
         if (args.length != 2) {
             System.err.println("usage: git ls-tree <tree sha>");
-            System.exit(1);
+            System.exit(0);
         }
 
         String treeSha = args[1];
