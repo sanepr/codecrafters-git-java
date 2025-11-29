@@ -14,7 +14,7 @@ public class ListTreeCommand {
         boolean nameOnly = false;
         String treeSha = null;
 
-        // Parse arguments: support "--name-only" in any position
+        // Parse flags and SHA
         for (int i = 1; i < args.length; i++) {
             if ("--name-only".equals(args[i])) {
                 nameOnly = true;
@@ -32,7 +32,7 @@ public class ListTreeCommand {
             System.exit(128);
         }
 
-        // Resolve object
+        // Load and decompress tree object
         String dir = treeSha.substring(0, 2);
         String file = treeSha.substring(2);
         Path objectPath = Path.of(".git/objects", dir, file);
@@ -42,7 +42,6 @@ public class ListTreeCommand {
             System.exit(128);
         }
 
-        // Decompress
         byte[] compressed = Files.readAllBytes(objectPath);
         Inflater inflater = new Inflater();
         inflater.setInput(compressed);
@@ -59,30 +58,39 @@ public class ListTreeCommand {
         // Parse tree entries
         int pos = 0;
         while (pos < data.length) {
-            // Read mode (e.g. "100644 ")
-            int spaceIdx = indexOf(data, pos, (byte) ' ');
-            if (spaceIdx == -1) throw new RuntimeException("corrupted tree object");
+            // Skip mode: read until space
+            int spacePos = -1;
+            for (int i = pos; i < data.length; i++) {
+                if (data[i] == ' ') {
+                    spacePos = i;
+                    break;
+                }
+            }
+            if (spacePos == -1) throw new RuntimeException("corrupted tree");
+            pos = spacePos + 1;  // skip space
 
-            // We don't need mode when --name-only
-            pos = spaceIdx + 1;
+            // Read filename until NUL byte
+            int nulPos = -1;
+            for (int i = pos; i < data.length; i++) {
+                if (data[i] == 0) {
+                    nulPos = i;
+                    break;
+                }
+            }
+            if (nulPos == -1) throw new RuntimeException("corrupted tree");
 
-            // Read filename until NUL
-            int nulIdx = indexOf(data, pos, (byte) 0);
-            if (nulIdx == -1) throw new RuntimeException("corrupted tree object");
-
-            String name = new String(data, pos, nulIdx - pos, StandardCharsets.UTF_8);
-            pos = nulIdx + 1;
+            String filename = new String(data, pos, nulPos - pos, StandardCharsets.UTF_8);
+            pos = nulPos + 1;
 
             // Skip 20-byte SHA-1
-            if (pos + 20 > data.length) throw new RuntimeException("corrupted tree object");
             pos += 20;
 
-            // OUTPUT
+            // OUTPUT: ONLY filename when --name-only
             if (nameOnly) {
-                System.out.println(name);                    // Only filename + newline
+                System.out.println(filename);
             } else {
-                // Full format: mode type sha\tname
-                String mode = new String(data, spaceIdx - 6, 6, StandardCharsets.UTF_8); // 6 digits
+                // Full format: mode type sha\tfilename
+                String mode = new String(data, spacePos - 6, 6, StandardCharsets.UTF_8);
                 String type = mode.startsWith("100") ? "blob" : "tree";
 
                 StringBuilder shaHex = new StringBuilder();
@@ -90,16 +98,8 @@ public class ListTreeCommand {
                     shaHex.append(String.format("%02x", data[i] & 0xff));
                 }
 
-                System.out.printf("%s %s %s\t%s%n", mode, type, shaHex, name);
+                System.out.printf("%s %s %s\t%s%n", mode, type, shaHex, filename);
             }
         }
-    }
-
-    // Helper to avoid manual loops
-    private static int indexOf(byte[] array, int start, byte target) {
-        for (int i = start; i < array.length; i++) {
-            if (array[i] == target) return i;
-        }
-        return -1;
     }
 }
