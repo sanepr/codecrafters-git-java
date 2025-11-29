@@ -57,29 +57,47 @@ public class HashObjectCommand implements Command {
 
             String sha = hashHex.toString();
 
+//            if (writeToRepo) {
+//                String dir = sha.substring(0, 2);
+//                String file = sha.substring(2);
+//                Path objectDir = Path.of(".git/objects", dir);
+//                Path objectFile = objectDir.resolve(file);
+//
+//                Files.createDirectories(objectDir);
+//
+//                Deflater deflater = new Deflater();
+//                deflater.setInput(fullContent);
+//                deflater.finish();
+//
+//                ByteArrayOutputStream compressOut = new ByteArrayOutputStream();
+//                byte[] buffer = new byte[2048];
+//
+//                while (!deflater.finished()) {
+//                    int count = deflater.deflate(buffer);
+//                    compressOut.write(buffer, 0, count);
+//                }
+//
+//                deflater.end();
+//
+//                Files.write(objectFile, compressOut.toByteArray());
+//            }
             if (writeToRepo) {
-                String dir = sha.substring(0, 2);
-                String file = sha.substring(2);
-                Path objectDir = Path.of(".git/objects", dir);
-                Path objectFile = objectDir.resolve(file);
-
-                Files.createDirectories(objectDir);
+                Path objectPath = Path.of(".git/objects", sha.substring(0,2), sha.substring(2));
+                Files.createDirectories(objectPath.getParent());
 
                 Deflater deflater = new Deflater();
                 deflater.setInput(fullContent);
                 deflater.finish();
 
-                ByteArrayOutputStream compressOut = new ByteArrayOutputStream();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
                 byte[] buffer = new byte[2048];
-
                 while (!deflater.finished()) {
                     int count = deflater.deflate(buffer);
-                    compressOut.write(buffer, 0, count);
+                    out.write(buffer, 0, count);
                 }
-
                 deflater.end();
 
-                Files.write(objectFile, compressOut.toByteArray());
+                Files.write(objectPath, out.toByteArray());
             }
 
             System.out.print(sha);
