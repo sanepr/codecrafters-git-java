@@ -27,7 +27,7 @@ public final class Git {
         }
         Command cmd = COMMANDS.getOrDefault(args[0], () -> {
             System.err.println("git: '" + args[0] + "' is not a git command.");
-            System.exit(128);
+            System.exit(0);
             return null;
         }).get();
 
