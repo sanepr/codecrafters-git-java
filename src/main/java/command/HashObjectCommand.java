@@ -62,7 +62,7 @@ public class HashObjectCommand implements Command {
                 deflater.finish();
 
                 ByteArrayOutputStream compressOut = new ByteArrayOutputStream();
-                byte[] buffer = new byte[2014];
+                byte[] buffer = new byte[2048];
 
                 while (!deflater.finished()) {
                     int count = deflater.deflate(buffer);
