@@ -14,6 +14,7 @@ public final class Git {
         register("cat-file",      CatCommand::new);
         register("write-tree",    WriteTreeCommand::new);
         register("ls-tree",    ListTreeCommand::new);
+        register("write-tree",    CommitTree::new);
     }
 
     private static void register(String name, Supplier<Command> supplier) {
