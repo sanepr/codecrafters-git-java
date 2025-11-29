@@ -79,15 +79,28 @@ public class WriteTreeCommand implements Command{
 //                    byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
 //
 //                    entries.add(new TreeEntry("40000", subSha, name));
-                if (Files.isDirectory(child)) {
-                    List<TreeEntry> subEntries = buildTreeEntries(child);
+//                if (Files.isDirectory(child)) {
+//                    List<TreeEntry> subEntries = buildTreeEntries(child);
+//
+//                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+//                    for (TreeEntry se : subEntries) {
+//                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+//                        subContent.write(0);
+//                        subContent.write(se.shaBytes);
+//                    }
 
-                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
-                    for (TreeEntry se : subEntries) {
-                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
-                        subContent.write(0);
-                        subContent.write(se.shaBytes);
-                    }
+                    if (Files.isDirectory(child)) {
+                        List<TreeEntry> subEntries = buildTreeEntries(child);
+
+                        // ADD THIS LINE — THIS IS THE MISSING PIECE
+                        subEntries.sort(Comparator.comparing(e -> e.mode + " " + e.name));
+
+                        ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+                        for (TreeEntry se : subEntries) {
+                            subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+                            subContent.write(0);
+                            subContent.write(se.shaBytes);
+                        }
 
                     byte[] subData = subContent.toByteArray();
                     String subHeader = "tree " + subData.length + "\0";
