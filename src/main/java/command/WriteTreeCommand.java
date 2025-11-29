@@ -46,7 +46,8 @@ public class WriteTreeCommand implements Command{
         }
         deflater.end();
 
-        Files.write(objPath, compressed.toByteArray(), StandardOpenOption.CREATE);
+//        Files.write(objPath, compressed.toByteArray(), StandardOpenOption.CREATE);
+        Files.write(objPath, compressed.toByteArray());
         System.out.print(treeSha);
     }
 
