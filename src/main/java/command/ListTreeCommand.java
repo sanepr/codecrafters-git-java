@@ -14,7 +14,7 @@ public class ListTreeCommand {
         boolean nameOnly = false;
         String treeSha = null;
 
-        // Parse flags and SHA
+        // Parse arguments: support "--name-only" in any position
         for (int i = 1; i < args.length; i++) {
             if ("--name-only".equals(args[i])) {
                 nameOnly = true;
@@ -32,7 +32,12 @@ public class ListTreeCommand {
             System.exit(128);
         }
 
-        // Load and decompress tree object
+        // Validate SHA and resolve object path
+        if (!treeSha.matches("^[0-9a-fA-F]{4,40}$")) {
+            System.err.println("fatal: not a valid object name " + treeSha);
+            System.exit(128);
+        }
+
         String dir = treeSha.substring(0, 2);
         String file = treeSha.substring(2);
         Path objectPath = Path.of(".git/objects", dir, file);
@@ -42,6 +47,7 @@ public class ListTreeCommand {
             System.exit(128);
         }
 
+        // Decompress tree object
         byte[] compressed = Files.readAllBytes(objectPath);
         Inflater inflater = new Inflater();
         inflater.setInput(compressed);
@@ -49,16 +55,21 @@ public class ListTreeCommand {
         byte[] buffer = new byte[1024];
         while (!inflater.finished()) {
             int count = inflater.inflate(buffer);
-            if (count == 0) break;
+            if (count == 0 && inflater.needsInput()) break;
             out.write(buffer, 0, count);
         }
         inflater.end();
         byte[] data = out.toByteArray();
 
-        // Parse tree entries
+        // Skip tree header: "tree <size>\0"
         int pos = 0;
+        while (pos < data.length && data[pos] != 0) pos++;
+        if (pos >= data.length) throw new RuntimeException("corrupted tree object");
+        pos++; // Skip null byte
+
+        // Parse tree entries
         while (pos < data.length) {
-            // Skip mode: read until space
+            // Read mode until space
             int spacePos = -1;
             for (int i = pos; i < data.length; i++) {
                 if (data[i] == ' ') {
@@ -66,8 +77,9 @@ public class ListTreeCommand {
                     break;
                 }
             }
-            if (spacePos == -1) throw new RuntimeException("corrupted tree");
-            pos = spacePos + 1;  // skip space
+            if (spacePos == -1) throw new RuntimeException("corrupted tree object");
+            String mode = new String(data, pos, spacePos - pos, StandardCharsets.UTF_8);
+            pos = spacePos + 1;
 
             // Read filename until NUL byte
             int nulPos = -1;
@@ -77,27 +89,24 @@ public class ListTreeCommand {
                     break;
                 }
             }
-            if (nulPos == -1) throw new RuntimeException("corrupted tree");
-
+            if (nulPos == -1) throw new RuntimeException("corrupted tree object");
             String filename = new String(data, pos, nulPos - pos, StandardCharsets.UTF_8);
             pos = nulPos + 1;
 
-            // Skip 20-byte SHA-1
+            // Read 20-byte SHA-1
+            if (pos + 20 > data.length) throw new RuntimeException("corrupted tree object");
+            byte[] shaBytes = Arrays.copyOfRange(data, pos, pos + 20);
             pos += 20;
 
-            // OUTPUT: ONLY filename when --name-only
+            // Output
             if (nameOnly) {
-                System.out.println(filename);
+                System.out.println(filename); // Only filename for --name-only
             } else {
-                // Full format: mode type sha\tfilename
-                String mode = new String(data, spacePos - 6, 6, StandardCharsets.UTF_8);
                 String type = mode.startsWith("100") ? "blob" : "tree";
-
                 StringBuilder shaHex = new StringBuilder();
-                for (int i = pos - 20; i < pos; i++) {
-                    shaHex.append(String.format("%02x", data[i] & 0xff));
+                for (byte b : shaBytes) {
+                    shaHex.append(String.format("%02x", b & 0xff));
                 }
-
                 System.out.printf("%s %s %s\t%s%n", mode, type, shaHex, filename);
             }
         }
