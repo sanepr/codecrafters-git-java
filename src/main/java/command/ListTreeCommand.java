@@ -1,16 +1,15 @@
 package command;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-public class ListTreeCommand {
-    public static void lsTree(String[] args) throws Exception {
+public class ListTreeCommand implements Command {
+    @Override
+    public void execute(String[] args) throws Exception {
         boolean nameOnly = false;
         String treeSha = null;
 
@@ -110,5 +109,6 @@ public class ListTreeCommand {
                 System.out.printf("%s %s %s\t%s%n", mode, type, shaHex, filename);
             }
         }
+
     }
 }

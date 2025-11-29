@@ -7,8 +7,9 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.zip.Deflater;
 
-public class HashObjectCommand {
-    public static void hashObjectCommand(String[] args) {
+public class HashObjectCommand implements Command {
+    @Override
+    public void execute(String[] args) throws Exception {
         boolean writeToRepo = false;
         String filePath = null;
 

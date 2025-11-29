@@ -4,8 +4,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
-public class InitCommand {
-    public static void initCommand() {
+public class InitCommand implements Command{
+    @Override
+    public void execute(String[] args) throws Exception {
         final File root = new File(".git");
         new File(root, "objects").mkdirs();
         new File(root, "refs").mkdirs();

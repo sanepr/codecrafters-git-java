@@ -11,8 +11,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.zip.Deflater;
 
-public class WriteTreeCommand {
-    public static void writeTree() throws Exception {
+public class WriteTreeCommand implements Command{
+    public void execute(String[] args) throws Exception {
         List<TreeEntry> entries = buildTreeEntries(Path.of("."));
 
         // CRITICAL: Sort by the EXACT byte string Git uses: "mode name"

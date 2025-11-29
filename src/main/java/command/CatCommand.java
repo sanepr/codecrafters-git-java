@@ -7,8 +7,8 @@ import java.nio.file.Paths;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-public class CatCommand {
-    public static void catFileCommand(String[] args) {
+public class CatCommand implements Command {
+    public void execute(String[] args) throws Exception {
         final String objectHash = args[2];
         final String objectFolder = objectHash.substring(0, 2);
         final String objectFilename = objectHash.substring(2);
@@ -30,8 +30,6 @@ public class CatCommand {
             } catch (DataFormatException e) {
                 throw new RuntimeException(e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 }
