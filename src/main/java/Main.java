@@ -14,7 +14,13 @@ public class Main {
             case "init" -> InitCommand.initCommand();
             case "cat-file" -> CatCommand.catFileCommand(args);
             case "hash-object" -> HashObjectCommand.hashObjectCommand(args);
-            case "ls-tree" -> ListTreeCommand.lsTree(args);
+            case "ls-tree" -> {
+                try {
+                    ListTreeCommand.lsTree(args);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
             default -> System.out.println("Unknown command: " + command);
         }
     }
