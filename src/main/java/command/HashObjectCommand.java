@@ -32,12 +32,20 @@ public class HashObjectCommand implements Command {
         try {
             byte[] fileContent = Files.readAllBytes(Path.of(filePath));
 
-            String header = "blob " + fileContent.length + "\0";
-            byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
+//            String header = "blob " + fileContent.length + "\0";
+//            byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
+//
+//            byte[] fullContent = new byte[headerBytes.length + fileContent.length];
+//            System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
+//            System.arraycopy(fileContent, 0, fullContent, headerBytes.length, fileContent.length);
 
-            byte[] fullContent = new byte[headerBytes.length + fileContent.length];
+            String headerText = "blob " + fileContent.length;
+            byte[] headerBytes = headerText.getBytes(StandardCharsets.UTF_8);
+
+            byte[] fullContent = new byte[headerBytes.length + 1 + fileContent.length];
             System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
-            System.arraycopy(fileContent, 0, fullContent, headerBytes.length, fileContent.length);
+            fullContent[headerBytes.length] = 0;  // ← THIS IS THE NULL BYTE
+            System.arraycopy(fileContent, 0, fullContent, headerBytes.length + 1, fileContent.length);
 
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
             byte[] hashBytes = sha1.digest(fullContent);
