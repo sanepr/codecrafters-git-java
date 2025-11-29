@@ -92,7 +92,8 @@ public class WriteTreeCommand {
                     String blobHeader = "blob " + data.length + "\0";
                     byte[] blobFull = concat(blobHeader.getBytes(StandardCharsets.UTF_8), data);
                     byte[] blobSha = MessageDigest.getInstance("SHA-1").digest(blobFull);
-                    String mode = Files.isExecutable(child) ? "100755" : "100644";
+//                    String mode = Files.isExecutable(child) ? "100755" : "100644";
+                    String mode = "100644";
                     result.add(new TreeEntry(mode, blobSha, name, false));
                 }
             }
