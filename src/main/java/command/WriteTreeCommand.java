@@ -93,8 +93,14 @@ public class WriteTreeCommand implements Command{
                             }
 
                             byte[] subData = subContent.toByteArray();
-                            String subHeader = "tree " + subData.length + "\0";
-                            byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
+//                            String subHeader = "tree " + subData.length + "\0";
+//                            byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
+                            String headerText = "tree " + subData.length;
+                            byte[] headerBytes = headerText.getBytes(StandardCharsets.UTF_8);
+                            byte[] fullSub = new byte[headerBytes.length + 1 + subData.length];
+                            System.arraycopy(headerBytes, 0, fullSub, 0, headerBytes.length);
+                            fullSub[headerBytes.length] = 0;  // manually add the null byte
+                            System.arraycopy(subData, 0, fullSub, headerBytes.length + 1, subData.length);
                             byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
 
                             entries.add(new TreeEntry("40000", subSha, name));
