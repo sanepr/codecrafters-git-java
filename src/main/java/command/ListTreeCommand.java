@@ -1,27 +1,38 @@
 package command;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 public class ListTreeCommand {
-    public static void lsTree(String[] args)  {
-        if (args.length != 2) {
-            System.err.println("usage: git ls-tree <tree sha>");
-            System.exit(0);
+    public static void lsTree(String[] args) {
+        boolean nameOnly = false;
+        String treeSha = null;
+
+        // Parse options
+        for (int i = 1; i < args.length; i++) {
+            if ("--name-only".equals(args[i])) {
+                nameOnly = true;
+            } else {
+                if (treeSha != null) {
+                    System.err.println("fatal: too many arguments");
+                    System.exit(128);
+                }
+                treeSha = args[i];
+            }
         }
 
-        String treeSha = args[1];
-
-        // Validate SHA length (full 40 chars or short)
-        if (!treeSha.matches("^[0-9a-fA-F]{4,40}$")) {
-            System.err.println("fatal: not a valid object name " + treeSha);
+        if (treeSha == null || treeSha.isEmpty()) {
+            System.err.println("usage: git ls-tree [--name-only] <tree sha>");
             System.exit(128);
         }
 
+        // Resolve object path
         String dir = treeSha.substring(0, 2);
         String file = treeSha.substring(2);
         Path objectPath = Path.of(".git/objects", dir, file);
@@ -31,73 +42,78 @@ public class ListTreeCommand {
             System.exit(128);
         }
 
-        try (Inflater inflater = new Inflater()) {
-            // Decompress the tree object
-            byte[] compressed = Files.readAllBytes(objectPath);
-            ;
-            inflater.setInput(compressed);
-            ByteArrayOutputStream decompressed = new ByteArrayOutputStream();
+        // Decompress tree object
+        byte[] compressed = null;
+        try {
+            compressed = Files.readAllBytes(objectPath);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
-            byte[] buffer = new byte[1024];
-            while (!inflater.finished()) {
-                int count = inflater.inflate(buffer);
-                if (count == 0) break;
-                decompressed.write(buffer, 0, count);
+        Inflater inflater = new Inflater();
+        inflater.setInput(compressed);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[1024];
+        while (!inflater.finished()) {
+            int count = 0;
+            try {
+                count = inflater.inflate(buf);
+            } catch (DataFormatException e) {
+                throw new RuntimeException(e);
             }
-            inflater.end();
+            if (count == 0) break;
+            out.write(buf, 0, count);
+        }
+        inflater.end();
+        byte[] data = out.toByteArray();
 
-            byte[] treeData = decompressed.toByteArray();
-
-            // Parse tree object: entries are: "mode path\0sha1"
-            int pos = 0;
-            while (pos < treeData.length) {
-                // Read mode (e.g., "100644 ")
-                int spaceIdx = -1;
-                for (int i = pos; i < treeData.length; i++) {
-                    if (treeData[i] == ' ') {
-                        spaceIdx = i;
-                        break;
-                    }
+        // Parse tree entries
+        int pos = 0;
+        while (pos < data.length) {
+            // mode + space
+            int spaceIdx = -1;
+            for (int i = pos; i < data.length; i++) {
+                if (data[i] == ' ') {
+                    spaceIdx = i;
+                    break;
                 }
-                if (spaceIdx == -1) throw new RuntimeException("Malformed tree");
+            }
+            if (spaceIdx == -1) throw new RuntimeException("corrupted tree");
 
-                String mode = new String(treeData, pos, spaceIdx - pos, StandardCharsets.UTF_8);
-                pos = spaceIdx + 1;
+            String mode = new String(data, pos, spaceIdx - pos, StandardCharsets.UTF_8);
+            pos = spaceIdx + 1;
 
-                // Read path until null byte
-                int nullIdx = -1;
-                for (int i = pos; i < treeData.length; i++) {
-                    if (treeData[i] == 0) {
-                        nullIdx = i;
-                        break;
-                    }
+            // filename until NUL
+            int nulIdx = -1;
+            for (int i = pos; i < data.length; i++) {
+                if (data[i] == 0) {
+                    nulIdx = i;
+                    break;
                 }
-                if (nullIdx == -1) throw new RuntimeException("Malformed tree");
+            }
+            if (nulIdx == -1) throw new RuntimeException("corrupted tree");
 
-                String path = new String(treeData, pos, nullIdx - pos, StandardCharsets.UTF_8);
-                pos = nullIdx + 1;
+            String name = new String(data, pos, nulIdx - pos, StandardCharsets.UTF_8);
+            pos = nulIdx + 1;
 
-                // Read 20-byte SHA-1 (binary)
-                if (pos + 20 > treeData.length) throw new RuntimeException("Malformed tree");
-                byte[] shaBytes = Arrays.copyOfRange(treeData, pos, pos + 20);
-                pos += 20;
+            // skip 20-byte SHA-1
+            if (pos + 20 > data.length) throw new RuntimeException("corrupted tree");
+            pos += 20;
 
-                // Convert SHA-1 bytes to hex
-                StringBuilder shaHex = new StringBuilder();
-                for (byte b : shaBytes) {
-                    shaHex.append(String.format("%02x", b));
-                }
-
-                // Determine type from mode
+            // Output
+            if (nameOnly) {
+                System.out.println(name);               // <-- only filename + newline
+            } else {
                 String type = mode.startsWith("100") ? "blob" :
                         mode.startsWith("040") ? "tree" : "commit";
 
-                // Output: mode type sha    path
-                System.out.printf("%s %s %s\t%s%n", mode, type, shaHex.toString(), path);
+                StringBuilder shaHex = new StringBuilder();
+                for (int j = pos - 20; j < pos; j++) {
+                    shaHex.append(String.format("%02x", data[j] & 0xff));
+                }
+
+                System.out.printf("%s %s %s\t%s%n", mode, type, shaHex, name);
             }
-        } catch (Exception e) {
-            System.err.print("Fatal: could not tree object");
-            System.exit(0);
         }
     }
 }
