@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -61,17 +60,18 @@ public class WriteTreeCommand implements Command{
 
             for (Path child : children) {
                 String name = child.getFileName().toString();
-
-//                if (Files.isDirectory(child)) {
-//                    List<TreeEntry> subEntries = buildTreeEntries(child);
-//                    if (subEntries.isEmpty()) continue;
+//                    if (Files.isDirectory(child)) {
+//                        List<TreeEntry> subEntries = buildTreeEntries(child);
 //
-//                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
-//                    for (TreeEntry se : subEntries) {
-//                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
-//                        subContent.write(0);
-//                        subContent.write(se.shaBytes);
-//                    }
+//                        // ADD THIS LINE — THIS IS THE MISSING PIECE
+//                        subEntries.sort(Comparator.comparing(e -> e.mode + " " + e.name));
+//
+//                        ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+//                        for (TreeEntry se : subEntries) {
+//                            subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+//                            subContent.write(0);
+//                            subContent.write(se.shaBytes);
+//                        }
 //
 //                    byte[] subData = subContent.toByteArray();
 //                    String subHeader = "tree " + subData.length + "\0";
@@ -79,35 +79,25 @@ public class WriteTreeCommand implements Command{
 //                    byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
 //
 //                    entries.add(new TreeEntry("40000", subSha, name));
-//                if (Files.isDirectory(child)) {
-//                    List<TreeEntry> subEntries = buildTreeEntries(child);
-//
-//                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
-//                    for (TreeEntry se : subEntries) {
-//                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
-//                        subContent.write(0);
-//                        subContent.write(se.shaBytes);
-//                    }
+                        if (Files.isDirectory(child)) {
+                            List<TreeEntry> subEntries = buildTreeEntries(child);
 
-                    if (Files.isDirectory(child)) {
-                        List<TreeEntry> subEntries = buildTreeEntries(child);
+                            // SORT SUBTREE ENTRIES — THIS WAS MISSING!
+                            subEntries.sort(Comparator.comparing(e -> e.mode + " " + e.name));
 
-                        // ADD THIS LINE — THIS IS THE MISSING PIECE
-                        subEntries.sort(Comparator.comparing(e -> e.mode + " " + e.name));
+                            ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+                            for (TreeEntry se : subEntries) {
+                                subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+                                subContent.write(0);
+                                subContent.write(se.shaBytes);
+                            }
 
-                        ByteArrayOutputStream subContent = new ByteArrayOutputStream();
-                        for (TreeEntry se : subEntries) {
-                            subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
-                            subContent.write(0);
-                            subContent.write(se.shaBytes);
-                        }
+                            byte[] subData = subContent.toByteArray();
+                            String subHeader = "tree " + subData.length + "\0";
+                            byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
+                            byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
 
-                    byte[] subData = subContent.toByteArray();
-                    String subHeader = "tree " + subData.length + "\0";
-                    byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
-                    byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
-
-                    entries.add(new TreeEntry("40000", subSha, name));
+                            entries.add(new TreeEntry("40000", subSha, name));
 
                 } else {
                     byte[] data = Files.readAllBytes(child);
