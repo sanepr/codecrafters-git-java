@@ -13,27 +13,19 @@ public class ListTreeCommand implements Command {
         boolean nameOnly = false;
         String treeSha = null;
 
-        // Parse arguments: support "--name-only" in any position
-        for (int i = 1; i < args.length; i++) {
-            if ("--name-only".equals(args[i])) {
+        for (String arg : args) {
+            if ("--name-only".equals(arg)) {
                 nameOnly = true;
+            } else if (treeSha == null) {
+                treeSha = arg;
             } else {
-                if (treeSha != null) {
-                    System.err.println("fatal: too many arguments");
-                    System.exit(128);
-                }
-                treeSha = args[i];
+                System.err.println("fatal: too many arguments");
+                System.exit(128);
             }
         }
 
-        if (treeSha == null || treeSha.isEmpty()) {
-            System.err.println("usage: git ls-tree [--name-only] <tree-sha>");
-            System.exit(128);
-        }
-
-        // Validate SHA and resolve object path
-        if (!treeSha.matches("^[0-9a-fA-F]{4,40}$")) {
-            System.err.println("fatal: not a valid object name " + treeSha);
+        if (treeSha == null) {
+            System.err.println("fatal: tree sha required");
             System.exit(128);
         }
 
