@@ -62,9 +62,25 @@ public class WriteTreeCommand implements Command{
             for (Path child : children) {
                 String name = child.getFileName().toString();
 
+//                if (Files.isDirectory(child)) {
+//                    List<TreeEntry> subEntries = buildTreeEntries(child);
+//                    if (subEntries.isEmpty()) continue;
+//
+//                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+//                    for (TreeEntry se : subEntries) {
+//                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+//                        subContent.write(0);
+//                        subContent.write(se.shaBytes);
+//                    }
+//
+//                    byte[] subData = subContent.toByteArray();
+//                    String subHeader = "tree " + subData.length + "\0";
+//                    byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
+//                    byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
+//
+//                    entries.add(new TreeEntry("40000", subSha, name));
                 if (Files.isDirectory(child)) {
                     List<TreeEntry> subEntries = buildTreeEntries(child);
-                    if (subEntries.isEmpty()) continue;
 
                     ByteArrayOutputStream subContent = new ByteArrayOutputStream();
                     for (TreeEntry se : subEntries) {
@@ -79,6 +95,7 @@ public class WriteTreeCommand implements Command{
                     byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
 
                     entries.add(new TreeEntry("40000", subSha, name));
+
                 } else {
                     byte[] data = Files.readAllBytes(child);
                     String blobHeader = "blob " + data.length + "\0";
