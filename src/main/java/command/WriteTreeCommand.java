@@ -12,114 +12,115 @@ import java.util.List;
 import java.util.zip.Deflater;
 
 public class WriteTreeCommand {
-    public static void writeTree() throws Exception {
-        Path root = Path.of(".");
+    public  static void writeTree() throws Exception {
         List<TreeEntry> entries = new ArrayList<>();
 
-        // Walk the filesystem and collect all regular files (skip .git)
-        try (var stream = Files.walk(root)) {
-            stream
-                    .filter(Files::isRegularFile)
-                    .filter(p -> !p.startsWith(".git"))
+        // Walk all files, but SKIP anything under .git/
+        try (var stream = Files.walk(Path.of("."))) {
+            stream.filter(Files::isRegularFile)
+                    .filter(p -> !p.toAbsolutePath().toString().contains("/.git/") &&
+                            !p.toAbsolutePath().toString().endsWith(".git"))
                     .forEach(file -> {
                         try {
-                            String relativePath = root.relativize(file).toString();
+                            String relativePath = file.toString();
                             if (File.separatorChar != '/') {
                                 relativePath = relativePath.replace(File.separatorChar, '/');
                             }
 
                             byte[] content = Files.readAllBytes(file);
                             String header = "blob " + content.length + "\0";
-                            byte[] full = concat(header.getBytes(StandardCharsets.UTF_8), content);
+                            byte[] full = Bytes.concat(header.getBytes(StandardCharsets.UTF_8), content);
 
                             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
                             byte[] shaBytes = sha1.digest(full);
-                            String shaHex = toHex(shaBytes);
+                            String shaHex = Bytes.toHex(shaBytes);
 
-                            // mode: 100644 for normal files, 100755 for executables
                             String mode = Files.isExecutable(file) ? "100755" : "100644";
 
-                            entries.add(new TreeEntry(mode, shaHex, relativePath));
+                            // Use only the filename (not full path) in tree entry
+                            String filename = file.getFileName().toString();
+                            String parentDir = file.getParent() == null ? "" : file.getParent().toString();
+                            if (parentDir.equals(".")) parentDir = "";
+
+                            // For subdirectories, we need path like "sub/file.txt"
+                            String treePath = parentDir.isEmpty() ? filename :
+                                    (parentDir + "/" + filename).replace("./", "");
+
+                            entries.add(new TreeEntry(mode, shaHex, treePath));
                         } catch (Exception e) {
-                            throw new RuntimeException("Failed to process file: " + file, e);
+                            throw new RuntimeException(e);
                         }
                     });
         }
 
-        // Sort entries by path (Git requires this!)
+        // Sort entries by full path (Git requires lexicographic order)
         entries.sort(Comparator.comparing(e -> e.path));
 
-        // Build tree object content
-        ByteArrayOutputStream treeContent = new ByteArrayOutputStream();
-        for (TreeEntry entry : entries) {
-            String path = entry.path;
-            String filename = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        // Build tree content: "mode name\0" + 20-byte SHA
+        ByteArrayOutputStream treeData = new ByteArrayOutputStream();
+        for (TreeEntry e : entries) {
+            String name = e.path.contains("/") ?
+                    e.path.substring(e.path.lastIndexOf("/") + 1) : e.path;
 
-            // Write: "mode filename\0" + 20-byte SHA-1
-            treeContent.write((entry.mode + " " + filename).getBytes(StandardCharsets.UTF_8));
-            treeContent.write((byte) 0);
-            treeContent.write(fromHex(entry.sha));
+            treeData.write((e.mode + " " + name).getBytes(StandardCharsets.UTF_8));
+            treeData.write(0);
+            treeData.write(Bytes.fromHex(e.sha));
         }
 
-        byte[] treeData = treeContent.toByteArray();
+        byte[] content = treeData.toByteArray();
 
-        // Compute final tree SHA-1
-        String treeHeader = "tree " + treeData.length + "\0";
-        byte[] fullTree = concat(treeHeader.getBytes(StandardCharsets.UTF_8), treeData);
+        // Final tree object: "tree <size>\0" + content
+        String header = "tree " + content.length + "\0";
+        byte[] fullObject = Bytes.concat(header.getBytes(StandardCharsets.UTF_8), content);
+
+        // Compute SHA-1
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-        byte[] treeShaBytes = sha1.digest(fullTree);
-        String treeSha = toHex(treeShaBytes);
+        String treeSha = Bytes.toHex(sha1.digest(fullObject));
 
-        // Write compressed object to .git/objects/
-        String dir = treeSha.substring(0, 2);
-        String file = treeSha.substring(2);
-        Path objectPath = Path.of(".git/objects", dir, file);
-        Files.createDirectories(objectPath.getParent());
+        // Write compressed object
+        Path objPath = Path.of(".git/objects", treeSha.substring(0,2), treeSha.substring(2));
+        Files.createDirectories(objPath.getParent());
 
         Deflater deflater = new Deflater();
-        deflater.setInput(fullTree);
+        deflater.setInput(fullObject);
         deflater.finish();
-
         ByteArrayOutputStream compressed = new ByteArrayOutputStream();
         byte[] buf = new byte[1024];
         while (!deflater.finished()) {
-            int count = deflater.deflate(buf);
-            compressed.write(buf, 0, count);
+            int n = deflater.deflate(buf);
+            compressed.write(buf, 0, n);
         }
         deflater.end();
 
-        Files.write(objectPath, compressed.toByteArray());
+        Files.write(objPath, compressed.toByteArray());
 
-        // Print the SHA-1 (no newline!)
-        System.out.print(treeSha);
+        System.out.print(treeSha);  // no newline!
     }
 
     // Helper record
     record TreeEntry(String mode, String sha, String path) {}
 
-    // Helper: byte[] + byte[]
-    private static byte[] concat(byte[] a, byte[] b) {
-        byte[] result = new byte[a.length + b.length];
-        System.arraycopy(a, 0, result, 0, a.length);
-        System.arraycopy(b, 0, result, a.length, b.length);
-        return result;
-    }
-
-    // Helper: SHA hex → bytes
-    private static byte[] fromHex(String hex) {
-        byte[] bytes = new byte[hex.length() / 2];
-        for (int i = 0; i < bytes.length; i++) {
-            bytes[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+    // Helper class for byte operations
+    static class Bytes {
+        static byte[] concat(byte[] a, byte[] b) {
+            byte[] c = new byte[a.length + b.length];
+            System.arraycopy(a, 0, c, 0, a.length);
+            System.arraycopy(b, 0, c, a.length, b.length);
+            return c;
         }
-        return bytes;
-    }
 
-    // Helper: bytes → hex string
-    private static String toHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b & 0xff));
+        static String toHex(byte[] bytes) {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) sb.append(String.format("%02x", b & 0xff));
+            return sb.toString();
         }
-        return sb.toString();
+
+        static byte[] fromHex(String hex) {
+            byte[] bytes = new byte[hex.length() / 2];
+            for (int i = 0; i < bytes.length; i++) {
+                bytes[i] = (byte) Integer.parseInt(hex.substring(i*2, i*2+2), 16);
+            }
+            return bytes;
+        }
     }
 }
