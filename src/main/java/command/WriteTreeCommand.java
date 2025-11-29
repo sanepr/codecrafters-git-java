@@ -1,7 +1,6 @@
 package command;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,18 +12,11 @@ import java.util.zip.Deflater;
 
 public class WriteTreeCommand {
     public static void writeTree() throws Exception {
-        Path root = Path.of(".");
-        List<TreeEntry> entries = buildTreeEntries(root, root);
+        List<TreeEntry> entries = buildTreeEntries(Path.of("."));
 
-        // Sort: directories first, then by name
-        entries.sort((a, b) -> {
-            if (a.isDir != b.isDir) {
-                return a.isDir ? -1 : 1;
-            }
-            return a.name.compareTo(b.name);
-        });
+        // CRITICAL: Sort by the EXACT byte string Git uses: "mode name"
+        entries.sort(Comparator.comparing(e -> e.mode + " " + e.name));
 
-        // Build tree content: "mode name\0sha"
         ByteArrayOutputStream content = new ByteArrayOutputStream();
         for (TreeEntry e : entries) {
             content.write((e.mode + " " + e.name).getBytes(StandardCharsets.UTF_8));
@@ -39,7 +31,6 @@ public class WriteTreeCommand {
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
         String treeSha = toHex(sha1.digest(fullObject));
 
-        // Write to .git/objects/
         Path objPath = Path.of(".git/objects", treeSha.substring(0, 2), treeSha.substring(2));
         Files.createDirectories(objPath.getParent());
 
@@ -54,61 +45,54 @@ public class WriteTreeCommand {
         }
         deflater.end();
 
-        Files.write(objPath, compressed.toByteArray());
+        Files.write(objPath, compressed.toByteArray(), StandardOpenOption.CREATE);
         System.out.print(treeSha);
     }
 
-    // Recursive builder — this is the magic
-    private static List<TreeEntry> buildTreeEntries(Path root, Path currentDir) throws Exception {
-        List<TreeEntry> result = new ArrayList<>();
+    private static List<TreeEntry> buildTreeEntries(Path dir) throws Exception {
+        List<TreeEntry> entries = new ArrayList<>();
 
-        try (var files = Files.list(currentDir)) {
-            var children = files
+        try (var stream = Files.list(dir)) {
+            var children = stream
                     .filter(p -> !p.getFileName().toString().equals(".git"))
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
                     .toList();
 
             for (Path child : children) {
                 String name = child.getFileName().toString();
 
                 if (Files.isDirectory(child)) {
-                    List<TreeEntry> subEntries = buildTreeEntries(root, child);
-                    if (!subEntries.isEmpty()) {
-                        // Build subtree object
-                        ByteArrayOutputStream subContent = new ByteArrayOutputStream();
-                        for (TreeEntry se : subEntries) {
-                            subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
-                            subContent.write(0);
-                            subContent.write(se.shaBytes);
-                        }
-                        byte[] subData = subContent.toByteArray();
-                        String subHeader = "tree " + subData.length + "\0";
-                        byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
-                        byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
-                        result.add(new TreeEntry("40000", subSha, name, true));
+                    List<TreeEntry> subEntries = buildTreeEntries(child);
+                    if (subEntries.isEmpty()) continue;
+
+                    ByteArrayOutputStream subContent = new ByteArrayOutputStream();
+                    for (TreeEntry se : subEntries) {
+                        subContent.write((se.mode + " " + se.name).getBytes(StandardCharsets.UTF_8));
+                        subContent.write(0);
+                        subContent.write(se.shaBytes);
                     }
+
+                    byte[] subData = subContent.toByteArray();
+                    String subHeader = "tree " + subData.length + "\0";
+                    byte[] fullSub = concat(subHeader.getBytes(StandardCharsets.UTF_8), subData);
+                    byte[] subSha = MessageDigest.getInstance("SHA-1").digest(fullSub);
+
+                    entries.add(new TreeEntry("40000", subSha, name));
                 } else {
                     byte[] data = Files.readAllBytes(child);
                     String blobHeader = "blob " + data.length + "\0";
                     byte[] blobFull = concat(blobHeader.getBytes(StandardCharsets.UTF_8), data);
                     byte[] blobSha = MessageDigest.getInstance("SHA-1").digest(blobFull);
-//                    String mode = Files.isExecutable(child) ? "100755" : "100644";
-                    String mode = "100644";
-                    result.add(new TreeEntry(mode, blobSha, name, false));
+
+                    entries.add(new TreeEntry("100644", blobSha, name));
                 }
             }
         }
-        return result;
+        return entries;
     }
 
-    // Record to hold entry data
-    record TreeEntry(String mode, byte[] shaBytes, String name, boolean isDir) {
-        TreeEntry(String mode, byte[] shaBytes, String name) {
-            this(mode, shaBytes, name, false);
-        }
+    record TreeEntry(String mode, byte[] shaBytes, String name) {
     }
 
-    // Helper methods
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] c = new byte[a.length + b.length];
         System.arraycopy(a, 0, c, 0, a.length);
